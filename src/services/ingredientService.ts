@@ -45,8 +45,14 @@ export const updateIngredientService = async (id: number, data: any) => {
   });
 };
 
-export const getAllIngredientsService = async () => {
+export const getAllIngredientsService = async (userId?: string) => {
   return await prisma.ingredient.findMany({
+    where: {
+      OR: [
+        { author_id: null }, 
+        ...(userId ? [{ author_id: userId }] : []) 
+      ]
+    },
     orderBy: { name: 'asc' }
   });
 };

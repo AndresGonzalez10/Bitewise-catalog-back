@@ -54,9 +54,10 @@ export const updateIngredient = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const getAllIngredients = async (_req: Request, res: Response): Promise<void> => {
+export const getAllIngredients = async (req: Request, res: Response): Promise<void> => {
+  const user_id = req.query.user_id as string | undefined; 
   try {
-    const ingredients = await getAllIngredientsService();
+    const ingredients = await getAllIngredientsService(user_id);
     res.json(ingredients);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener ingredientes' });
