@@ -2,12 +2,21 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
+// --- FUNCIONES DEL CRUD DE RECETAS ---
+
 export const getAllRecipesService = async (userId: string) => {
   return await prisma.recipe.findMany({
-    where: { author_id: userId },
+    where: {
+      OR: [
+        { is_custom: false },
+        { author_id: userId }
+      ]
+    },
     include: {
-      ingredients: {
-        include: { ingredient: true }
+      ingredients: { 
+        include: { 
+          ingredient: true 
+        }
       }
     },
     orderBy: { id: 'asc' }
@@ -24,7 +33,7 @@ export const createRecipeService = async (data: any) => {
       image_url,
       author_id,
       is_custom: true, 
-      ingredients: {
+      ingredients: { // Relación definida en tu model Recipe
         create: ingredients?.map((ing: any) => ({
           ingredient_id: ing.ingredient_id,
           required_quantity: ing.required_quantity
@@ -68,4 +77,81 @@ export const deleteRecipeService = async (id: number, user_id: string) => {
   }
 
   return await prisma.recipe.delete({ where: { id } });
+};
+
+// --- EL MOTOR DE MATCH (INTELIGENCIA) ---
+
+export const getMatchingRecipesService = async (userId: string) => {
+  // 1. Traer recetas usando los nombres de tu schema
+  const allRecipes = await prisma.recipe.findMany({
+    where: {
+      OR: [
+        { is_custom: false },
+        { author_id: userId }
+      ]
+    },
+    include: {
+      ingredients: { 
+        include: { ingredient: true }
+      }
+    }
+  });
+
+  // 2. Traer el inventario (Asegúrate de haber hecho npx prisma generate tras añadirlo al schema)
+  const userInventory = await prisma.inventory.findMany({
+    where: { user_id: userId }
+  });
+
+  const perfectMatch: any[] = [];
+  const partialMatch: any[] = [];
+
+  allRecipes.forEach((recipe: any) => {
+    let canCookPerfectly = true;
+    const missingIngredients: any[] = [];
+
+    const formattedIngredients = recipe.ingredients.map((ri: any) => {
+      const userInvItem = userInventory.find((inv: any) => inv.ingredient_id === ri.ingredient_id);
+      const userHas = userInvItem ? Number(userInvItem.current_quantity) : 0;
+      const required = Number(ri.required_quantity);
+
+      if (userHas < required) {
+        canCookPerfectly = false;
+        missingIngredients.push({
+          ingredient_id: ri.ingredient_id,
+          name: ri.ingredient.name,
+          missing_quantity: required - userHas,
+          unit: ri.ingredient.unit_default
+        });
+      }
+
+      return {
+        ingredient_id: ri.ingredient_id,
+        name: ri.ingredient.name,
+        required_quantity: required,
+        unit: ri.ingredient.unit_default,
+        user_has_quantity: userHas
+      };
+    });
+
+    const recipeData = {
+      recipe_id: recipe.id,
+      title: recipe.title,
+      instructions: recipe.instructions,
+      image_url: recipe.image_url,
+      ingredients: formattedIngredients
+    };
+
+    if (recipe.ingredients.length > 0) {
+      if (canCookPerfectly) {
+        perfectMatch.push(recipeData);
+      } else {
+        partialMatch.push({
+          ...recipeData,
+          missing_ingredients: missingIngredients
+        });
+      }
+    }
+  });
+
+  return { perfectMatch, partialMatch };
 };

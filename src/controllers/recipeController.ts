@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { getAllRecipesService, createRecipeService, updateRecipeService, deleteRecipeService } from '../services/recipeService';
+import { getAllRecipesService, createRecipeService, updateRecipeService, deleteRecipeService,getMatchingRecipesService } from '../services/recipeService';
 
 export const getAllRecipes = async (req: Request, res: Response): Promise<void> => {
   const user_id = req.query.user_id as string | undefined;
@@ -12,18 +12,18 @@ export const getAllRecipes = async (req: Request, res: Response): Promise<void> 
   try {
     const localRecipes = await getAllRecipesService(user_id);
     
-    const formattedLocal = localRecipes.map(r => ({
-      ...r,
-      ingredients: r.ingredients.map(ri => ({
-        name: ri.ingredient.name,
-        quantity: ri.required_quantity,
-        unit: ri.ingredient.unit_default,
-        ingredient_id: ri.ingredient_id
-      }))
-    }));
+    const formattedLocal = localRecipes.map((r: any) => ({
+  ...r,
+  ingredients: r.ingredients.map((ri: any) => ({ 
+    name: ri.ingredient.name,
+    quantity: ri.required_quantity,
+    unit: ri.ingredient.unit_default,
+    ingredient_id: ri.ingredient_id
+  }))
+}));
 
     res.json({
-      message: 'Recetas obtenidas (Próximamente incluirán las de la API externa)',
+      message: 'Recetas obtenidas exitosamente',
       recipes: formattedLocal 
     });
 
@@ -84,5 +84,26 @@ export const deleteRecipe = async (req: Request, res: Response): Promise<void> =
     }
     console.error('Error al eliminar receta:', error);
     res.status(500).json({ error: 'Error al procesar la solicitud.' });
+  }
+};
+
+export const getMatch = async (req: Request, res: Response): Promise<void> => {
+  const { user_id } = req.params;
+
+  if (!user_id) {
+    res.status(400).json({ error: 'Falta el ID del usuario.' });
+    return;
+  }
+
+  try {
+    // Usamos 'as string' para asegurar el tipo a TypeScript
+    const matches = await getMatchingRecipesService(user_id as string);
+    res.json({
+      message: 'Match calculado exitosamente',
+      data: matches
+    });
+  } catch (error) {
+    console.error('Error al calcular el match:', error);
+    res.status(500).json({ error: 'Error interno del servidor.' });
   }
 };
