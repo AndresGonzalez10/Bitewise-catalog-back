@@ -3,7 +3,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export const createIngredientService = async (data: any) => {
-  const { author_id, name, category, purchase_price, purchase_quantity, unit_default } = data;
+  const { author_id, name, category, purchase_price, purchase_quantity, unit_default, weight_per_unit } = data;
 
   let calculatedUnitPrice = 0.05; 
   if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
@@ -16,13 +16,14 @@ export const createIngredientService = async (data: any) => {
       name,
       category,
       unit_price: calculatedUnitPrice,
-      unit_default: unit_default || 'g'
+      unit_default: unit_default || 'g',
+      weight_per_unit: Number(weight_per_unit) || 1.00 // 👈 AGREGAR ESTO
     }
   });
 };
 
 export const updateIngredientService = async (id: number, data: any) => {
-  const { user_id, name, category, purchase_price, purchase_quantity, unit_default } = data;
+  const { user_id, name, category, purchase_price, purchase_quantity, unit_default, weight_per_unit } = data;
 
   const ingredient = await prisma.ingredient.findUnique({ where: { id } });
   if (!ingredient || ingredient.author_id !== user_id) {
@@ -40,7 +41,8 @@ export const updateIngredientService = async (id: number, data: any) => {
       name: name || ingredient.name,
       category: category || ingredient.category,
       unit_price: calculatedUnitPrice,
-      unit_default: unit_default || ingredient.unit_default
+      unit_default: unit_default || ingredient.unit_default,
+      weight_per_unit: weight_per_unit !== undefined ? Number(weight_per_unit) : ingredient.weight_per_unit 
     }
   });
 };

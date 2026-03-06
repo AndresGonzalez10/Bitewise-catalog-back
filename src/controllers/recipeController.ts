@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { getAllRecipesService, createRecipeService, updateRecipeService, deleteRecipeService,getMatchingRecipesService } from '../services/recipeService';
+import { searchExternalRecipesService, getRandomExternalRecipesService, importExternalRecipeService } from '../services/externalRecipeService';
 
 export const getAllRecipes = async (req: Request, res: Response): Promise<void> => {
   const user_id = req.query.user_id as string | undefined;
@@ -96,7 +97,6 @@ export const getMatch = async (req: Request, res: Response): Promise<void> => {
   }
 
   try {
-    // Usamos 'as string' para asegurar el tipo a TypeScript
     const matches = await getMatchingRecipesService(user_id as string);
     res.json({
       message: 'Match calculado exitosamente',
@@ -105,5 +105,62 @@ export const getMatch = async (req: Request, res: Response): Promise<void> => {
   } catch (error) {
     console.error('Error al calcular el match:', error);
     res.status(500).json({ error: 'Error interno del servidor.' });
+  }
+};
+
+export const searchExternalRecipes = async (req: Request, res: Response): Promise<void> => {
+  const { query } = req.query;
+  
+  if (!query) {
+    res.status(400).json({ error: 'Debes proporcionar un término de búsqueda en el query param ?query=' });
+    return;
+  }
+
+  try {
+    const recipes = await searchExternalRecipesService(query as string);
+    res.json({
+      message: 'Recetas externas obtenidas con éxito',
+      source: 'TheMealDB V2 Pro',
+      count: recipes.length,
+      recipes
+    });
+  } catch (error) {
+    console.error('Error al buscar en API externa:', error);
+    res.status(500).json({ error: 'Error al consultar el catálogo global.' });
+  }
+};
+
+export const getRandomExternalRecipes = async (_req: Request, res: Response): Promise<void> => {
+  try {
+    const recipes = await getRandomExternalRecipesService();
+    res.json({
+      message: 'Sugerencias globales obtenidas con éxito',
+      source: 'TheMealDB V2 Pro',
+      count: recipes.length,
+      recipes
+    });
+  } catch (error) {
+    console.error('Error al obtener recetas aleatorias:', error);
+    res.status(500).json({ error: 'Error al consultar el catálogo global.' });
+  }
+};
+
+export const importExternalRecipe = async (req: Request, res: Response): Promise<void> => {
+  const { externalMeal, user_id } = req.body;
+
+  if (!externalMeal || !user_id) {
+    res.status(400).json({ error: 'Faltan datos: externalMeal y user_id son obligatorios.' });
+    return;
+  }
+
+  try {
+    const newLocalRecipe = await importExternalRecipeService(externalMeal, user_id);
+    res.status(201).json({
+      message: '¡Receta importada a tu catálogo exitosamente!',
+      recipe: newLocalRecipe
+    });
+  } catch (error) {
+    console.error('Error al importar receta:', error);
+    res.status(500).json({ error: 'Error al procesar la importación en la base de datos.' });
   }
 };
