@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { createIngredientService, updateIngredientService, getAllIngredientsService } from '../services/ingredientService';
+import { createIngredientService, updateIngredientService, getAllIngredientsService, deleteIngredientService } from '../services/ingredientService';
 
 export const createIngredient = async (req: Request, res: Response): Promise<void> => {
   const { author_id, name, category } = req.body;
@@ -61,5 +61,27 @@ export const getAllIngredients = async (req: Request, res: Response): Promise<vo
     res.json(ingredients);
   } catch (error) {
     res.status(500).json({ error: 'Error al obtener ingredientes' });
+  }
+};
+
+export const deleteIngredient = async (req: Request, res: Response): Promise<void> => {
+  const id = Number(req.params.id);
+  const { user_id } = req.body;
+
+  if (!user_id) {
+    res.status(400).json({ error: 'Debes proporcionar tu user_id para verificar que eres el creador.' });
+    return;
+  }
+
+  try {
+    await deleteIngredientService(id, user_id);
+    res.json({ message: 'Ingrediente eliminado correctamente de tu catálogo.' });
+  } catch (error: any) {
+    if (error.message.includes('No tienes permiso')) {
+      res.status(403).json({ error: error.message });
+      return;
+    }
+    console.error('Error al eliminar ingrediente:', error);
+    res.status(500).json({ error: 'Error al procesar la solicitud.' });
   }
 };

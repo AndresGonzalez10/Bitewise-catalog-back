@@ -58,3 +58,15 @@ export const getAllIngredientsService = async (userId?: string) => {
     orderBy: { name: 'asc' }
   });
 };
+export const deleteIngredientService = async (id: number, user_id: string) => {
+  
+  const ingredient = await prisma.ingredient.findUnique({ where: { id } });
+  
+  if (!ingredient || ingredient.author_id !== user_id) {
+    throw new Error('No tienes permiso para eliminar este ingrediente o no existe.');
+  }
+
+  return await prisma.ingredient.delete({
+    where: { id }
+  });
+};
