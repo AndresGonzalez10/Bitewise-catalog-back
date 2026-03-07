@@ -7,7 +7,7 @@ export const createIngredientService = async (data: any) => {
 
   let calculatedUnitPrice = 0.05; 
   if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
-    calculatedUnitPrice = purchase_price / purchase_quantity;
+    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
   }
 
   return await prisma.ingredient.create({
@@ -17,7 +17,7 @@ export const createIngredientService = async (data: any) => {
       category,
       unit_price: calculatedUnitPrice,
       unit_default: unit_default || 'g',
-      weight_per_unit: Number(weight_per_unit) || 1.00 // 👈 AGREGAR ESTO
+      weight_per_unit: Number(weight_per_unit) || 1.00
     }
   });
 };
@@ -32,7 +32,7 @@ export const updateIngredientService = async (id: number, data: any) => {
 
   let calculatedUnitPrice = ingredient.unit_price; 
   if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
-    calculatedUnitPrice = purchase_price / purchase_quantity as any;
+    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity) as any;
   }
 
   return await prisma.ingredient.update({
@@ -58,13 +58,16 @@ export const getAllIngredientsService = async (userId?: string) => {
     orderBy: { name: 'asc' }
   });
 };
+
 export const deleteIngredientService = async (id: number, user_id: string) => {
-  
+
   const ingredient = await prisma.ingredient.findUnique({ where: { id } });
   
+
   if (!ingredient || ingredient.author_id !== user_id) {
     throw new Error('No tienes permiso para eliminar este ingrediente o no existe.');
   }
+
 
   return await prisma.ingredient.delete({
     where: { id }

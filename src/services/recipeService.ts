@@ -24,7 +24,7 @@ export const getAllRecipesService = async (userId: string) => {
 };
 
 export const createRecipeService = async (data: any) => {
-  const { title, instructions, image_url, author_id, ingredients } = data;
+  const { title, instructions, image_url, author_id, ingredients, servings } = data; 
 
   return await prisma.recipe.create({
     data: {
@@ -33,6 +33,7 @@ export const createRecipeService = async (data: any) => {
       image_url,
       author_id,
       is_custom: true, 
+      servings: servings || '1-2', 
       ingredients: { 
         create: ingredients?.map((ing: any) => ({
           ingredient_id: ing.ingredient_id,
@@ -44,7 +45,7 @@ export const createRecipeService = async (data: any) => {
 };
 
 export const updateRecipeService = async (id: number, data: any) => {
-  const { user_id, title, instructions, image_url, ingredients } = data;
+  const { user_id, title, instructions, image_url, ingredients, servings } = data;
 
   const recipe = await prisma.recipe.findUnique({ where: { id } });
   if (!recipe || recipe.author_id !== user_id) {
@@ -57,6 +58,7 @@ export const updateRecipeService = async (id: number, data: any) => {
       title: title || recipe.title,
       instructions: instructions || recipe.instructions,
       image_url: image_url || recipe.image_url,
+      servings: servings || recipe.servings, 
       ...(ingredients && {
         ingredients: {
           deleteMany: {}, 
@@ -157,4 +159,47 @@ if (userHas < required) {
   });
 
   return { perfectMatch, partialMatch };
+};
+
+export const getScaledRecipeService = async (id: number, targetServings?: string) => {
+  const recipe = await prisma.recipe.findUnique({
+    where: { id },
+    include: {
+      ingredients: {
+        include: { ingredient: true }
+      }
+    }
+  });
+
+  if (!recipe) throw new Error('Receta no encontrada');
+
+  if (!targetServings || targetServings === recipe.servings) {
+    return recipe;
+  }
+
+  const servingLevels: Record<string, number> = {
+    "1-2": 1,
+    "3-4": 2,
+    "5-6": 3,
+    "7-8": 4
+  };
+
+  const baseLevel = servingLevels[recipe.servings || "1-2"];
+  const targetLevel = servingLevels[targetServings];
+
+  if (!targetLevel) return recipe;
+
+  const multiplier = targetLevel / baseLevel;
+
+  const scaledRecipe = {
+    ...recipe,
+    viewing_servings: targetServings, 
+    ingredients: recipe.ingredients.map((ri: any) => ({
+      ...ri,
+      required_quantity: Number(ri.required_quantity) * multiplier, 
+      ingredient: ri.ingredient
+    }))
+  };
+
+  return scaledRecipe;
 };
