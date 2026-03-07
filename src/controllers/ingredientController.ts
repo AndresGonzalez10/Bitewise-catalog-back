@@ -2,10 +2,20 @@ import { Request, Response } from 'express';
 import { createIngredientService, updateIngredientService, getAllIngredientsService, deleteIngredientService } from '../services/ingredientService';
 
 export const createIngredient = async (req: Request, res: Response): Promise<void> => {
-  const { author_id, name, category } = req.body;
+  const { author_id, name, category, purchase_price, purchase_quantity, weight_per_unit } = req.body;
 
   if (!author_id || !name || !category) {
     res.status(400).json({ error: 'Faltan datos obligatorios: author_id, name o category.' });
+    return;
+  }
+  if (
+    (purchase_price !== undefined && Number(purchase_price) < 0) ||
+    (purchase_quantity !== undefined && Number(purchase_quantity) <= 0) ||
+    (weight_per_unit !== undefined && Number(weight_per_unit) <= 0)
+  ) {
+    res.status(400).json({ 
+      error: 'Error matemático: Los precios no pueden ser negativos, y las cantidades o pesos deben ser mayores a cero.' 
+    });
     return;
   }
 
@@ -27,10 +37,20 @@ export const createIngredient = async (req: Request, res: Response): Promise<voi
 
 export const updateIngredient = async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { user_id } = req.body;
+  const { user_id, purchase_price, purchase_quantity, weight_per_unit } = req.body;
 
   if (!user_id) {
     res.status(400).json({ error: 'Debes proporcionar tu user_id para verificar que eres el creador.' });
+    return;
+  }
+  if (
+    (purchase_price !== undefined && Number(purchase_price) < 0) ||
+    (purchase_quantity !== undefined && Number(purchase_quantity) <= 0) ||
+    (weight_per_unit !== undefined && Number(weight_per_unit) <= 0)
+  ) {
+    res.status(400).json({ 
+      error: 'Error matemático: Los precios no pueden ser negativos, y las cantidades o pesos deben ser mayores a cero.' 
+    });
     return;
   }
 
