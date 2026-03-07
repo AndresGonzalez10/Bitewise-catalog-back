@@ -1,13 +1,16 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { AuthRequest } from '../middlewares/authMiddleware'; 
 import { createIngredientService, updateIngredientService, getAllIngredientsService, deleteIngredientService } from '../services/ingredientService';
 
-export const createIngredient = async (req: Request, res: Response): Promise<void> => {
-  const { author_id, name, category, purchase_price, purchase_quantity, weight_per_unit } = req.body;
+export const createIngredient = async (req: AuthRequest, res: Response): Promise<void> => {
+  const author_id = req.user?.userId; 
+  const { name, category, purchase_price, purchase_quantity, weight_per_unit } = req.body;
 
   if (!author_id || !name || !category) {
-    res.status(400).json({ error: 'Faltan datos obligatorios: author_id, name o category.' });
+    res.status(400).json({ error: 'Faltan datos obligatorios: name o category (o el token es inválido).' });
     return;
   }
+
   if (
     (purchase_price !== undefined && Number(purchase_price) < 0) ||
     (purchase_quantity !== undefined && Number(purchase_quantity) <= 0) ||
@@ -20,7 +23,7 @@ export const createIngredient = async (req: Request, res: Response): Promise<voi
   }
 
   try {
-    const newIngredient = await createIngredientService(req.body);
+    const newIngredient = await createIngredientService({ ...req.body, author_id });
     res.status(201).json({
       message: 'Ingrediente creado. El precio por unidad fue calculado automáticamente.',
       ingredient: newIngredient
@@ -35,14 +38,16 @@ export const createIngredient = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const updateIngredient = async (req: Request, res: Response): Promise<void> => {
+export const updateIngredient = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  const { user_id, purchase_price, purchase_quantity, weight_per_unit } = req.body;
+  const user_id = req.user?.userId; 
+  const { purchase_price, purchase_quantity, weight_per_unit } = req.body;
 
   if (!user_id) {
-    res.status(400).json({ error: 'Debes proporcionar tu user_id para verificar que eres el creador.' });
+    res.status(400).json({ error: 'No se pudo verificar tu identidad a partir del token.' });
     return;
   }
+
   if (
     (purchase_price !== undefined && Number(purchase_price) < 0) ||
     (purchase_quantity !== undefined && Number(purchase_quantity) <= 0) ||
@@ -55,7 +60,7 @@ export const updateIngredient = async (req: Request, res: Response): Promise<voi
   }
 
   try {
-    const updatedIngredient = await updateIngredientService(Number(id), req.body);
+    const updatedIngredient = await updateIngredientService(Number(id), { ...req.body, user_id });
     res.json({
       message: 'Ingrediente actualizado correctamente con el nuevo costo por unidad.',
       ingredient: updatedIngredient
@@ -74,22 +79,12 @@ export const updateIngredient = async (req: Request, res: Response): Promise<voi
   }
 };
 
-export const getAllIngredients = async (req: Request, res: Response): Promise<void> => {
-  const user_id = req.query.user_id as string | undefined; 
-  try {
-    const ingredients = await getAllIngredientsService(user_id);
-    res.json(ingredients);
-  } catch (error) {
-    res.status(500).json({ error: 'Error al obtener ingredientes' });
-  }
-};
-
-export const deleteIngredient = async (req: Request, res: Response): Promise<void> => {
+export const deleteIngredient = async (req: AuthRequest, res: Response): Promise<void> => {
   const id = Number(req.params.id);
-  const { user_id } = req.body;
+  const user_id = req.user?.userId; 
 
   if (!user_id) {
-    res.status(400).json({ error: 'Debes proporcionar tu user_id para verificar que eres el creador.' });
+    res.status(400).json({ error: 'No se pudo verificar tu identidad a partir del token.' });
     return;
   }
 
@@ -103,5 +98,15 @@ export const deleteIngredient = async (req: Request, res: Response): Promise<voi
     }
     console.error('Error al eliminar ingrediente:', error);
     res.status(500).json({ error: 'Error al procesar la solicitud.' });
+  }
+};
+
+export const getAllIngredients = async (req: AuthRequest, res: Response): Promise<void> => {
+  const user_id = req.user?.userId; 
+  try {
+    const ingredients = await getAllIngredientsService(user_id);
+    res.json(ingredients);
+  } catch (error) {
+    res.status(500).json({ error: 'Error al obtener ingredientes' });
   }
 };
