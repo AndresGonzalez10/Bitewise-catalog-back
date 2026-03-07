@@ -1,7 +1,7 @@
 import { Response } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import { getAllRecipesService, createRecipeService, updateRecipeService, deleteRecipeService,getMatchingRecipesService, getScaledRecipeService } from '../services/recipeService';
-import { searchExternalRecipesService, getRandomExternalRecipesService, importExternalRecipeService } from '../services/externalRecipeService';
+import { searchExternalRecipesService, getRandomExternalRecipesService, importExternalRecipeService, getAllRegionalRecipesService } from '../services/externalRecipeService';
 
 export const getAllRecipes = async (req: AuthRequest, res: Response): Promise<void> => {
 
@@ -65,7 +65,6 @@ export const createRecipe = async (req: AuthRequest, res: Response): Promise<voi
 
 export const updateRecipe = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  // 👇 ID del token
   const user_id = req.user?.userId;
   const { title, instructions, image_url, ingredients } = req.body;
 
@@ -74,7 +73,6 @@ export const updateRecipe = async (req: AuthRequest, res: Response): Promise<voi
     return;
   }
 
-  // 👇 BLINDAJE MATEMÁTICO
   if (ingredients && Array.isArray(ingredients)) {
     const hasInvalidQuantity = ingredients.some((ing: any) => Number(ing.required_quantity) <= 0);
     if (hasInvalidQuantity) {
@@ -84,7 +82,6 @@ export const updateRecipe = async (req: AuthRequest, res: Response): Promise<voi
   }
 
   try {
-    // Pasamos el user_id seguro
     await updateRecipeService(Number(id), { user_id, title, instructions, image_url, ingredients });
     res.json({ message: '¡Receta actualizada con éxito!' });
   } catch (error: any) {
@@ -99,7 +96,6 @@ export const updateRecipe = async (req: AuthRequest, res: Response): Promise<voi
 
 export const deleteRecipe = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  // 👇 ID del token
   const user_id = req.user?.userId;
 
   if (!user_id) {
@@ -199,7 +195,6 @@ export const importExternalRecipe = async (req: AuthRequest, res: Response): Pro
 };
 export const getRecipeById = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
-  // Capturamos el tamaño de porción que el usuario quiere ver desde la URL (?servings=3-4)
   const targetServings = req.query.servings as string | undefined;
 
   try {
@@ -212,5 +207,19 @@ export const getRecipeById = async (req: AuthRequest, res: Response): Promise<vo
     }
     console.error('Error al obtener la receta:', error);
     res.status(500).json({ error: 'Error en el servidor' });
+  }
+};
+
+export const getAllRegionalRecipes = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const recipes = await getAllRegionalRecipesService();
+    res.json({
+      message: 'Recetas regionales obtenidas con éxito',
+      count: recipes.length,
+      recipes
+    });
+  } catch (error) {
+    console.error('Error al obtener recetas regionales:', error);
+    res.status(500).json({ error: 'Error al consultar el catálogo regional.' });
   }
 };
