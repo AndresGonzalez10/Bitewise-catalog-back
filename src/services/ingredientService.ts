@@ -30,9 +30,9 @@ export const updateIngredientService = async (id: number, data: any) => {
     throw new Error('No tienes permiso para editar este ingrediente o no existe.');
   }
 
-  let calculatedUnitPrice = ingredient.unit_price; 
+  let calculatedUnitPrice = Number(ingredient.unit_price); 
   if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
-    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity) as any;
+    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
   }
 
   return await prisma.ingredient.update({
@@ -59,15 +59,26 @@ export const getAllIngredientsService = async (userId?: string) => {
   });
 };
 
-export const deleteIngredientService = async (id: number, user_id: string) => {
+export const searchIngredientsService = async (query: string, userId?: string) => {
+  return await prisma.ingredient.findMany({
+    where: {
+      name: { contains: query, mode: 'insensitive' }, 
+      OR: [
+        { author_id: null },
+        ...(userId ? [{ author_id: userId }] : [])
+      ]
+    },
+    orderBy: { name: 'asc' },
+    take: 20 
+  });
+};
 
+export const deleteIngredientService = async (id: number, user_id: string) => {
   const ingredient = await prisma.ingredient.findUnique({ where: { id } });
   
-
   if (!ingredient || ingredient.author_id !== user_id) {
     throw new Error('No tienes permiso para eliminar este ingrediente o no existe.');
   }
-
 
   return await prisma.ingredient.delete({
     where: { id }

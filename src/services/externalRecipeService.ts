@@ -25,9 +25,10 @@ export interface FormattedRecipe {
   image_url: string;
   instructions: string;
   is_custom: boolean;
-  servings: null; 
+  servings: string | null; 
   ingredients: {
     name: string;
+    original_name: string; // <-- Guardamos el inglés escondido para los precios
     original_measure: string;
     quantity: number;
     unit: string;
@@ -42,75 +43,135 @@ const TRANSLATIONS: Record<string, string> = {
   'Venezuelan': 'Venezolana',
   'Chicken': 'Pollo',
   'Beef': 'Res',
-  'Vegetarian': 'Vegetariana'
+  'Vegetarian': 'Vegetariana',
+  'Dessert': 'Postre',
+  'Seafood': 'Mariscos'
 };
 
-const convertToGrams = (measure: string, ingredientName: string): number => {
-  const lowerMeasure = measure?.toLowerCase() || '';
-  const match = lowerMeasure.match(/(\d+[\d\./]*)/); 
-  const amount = match ? parseFloat(match[1]) : 1; 
-
-  if (lowerMeasure.includes('kg')) return amount * 1000;
-  if (lowerMeasure.includes('g') && !lowerMeasure.includes('garlic')) return amount;
-  if (lowerMeasure.includes('lb')) return amount * 453; 
-  if (lowerMeasure.includes('oz')) return amount * 28;  
-  if (lowerMeasure.includes('cup')) return amount * 240; 
-  if (lowerMeasure.includes('tbsp') || lowerMeasure.includes('tbs')) return amount * 15; 
-  if (lowerMeasure.includes('tsp')) return amount * 5; 
-  if (lowerMeasure.includes('clove')) return amount * 5; 
-
-  return amount * 50; 
+const ESTIMATED_PRICES_EN: Record<string, number> = {
+  'olive oil': 0.15, 'butter': 0.12, 'beef': 0.18, 'pork': 0.12, 'chicken': 0.08, 
+  'sugar': 0.03, 'flour': 0.02, 'salt': 0.01, 'pepper': 0.15, 'soy sauce': 0.06,
+  'milk': 0.03, 'cheese': 0.16, 'garlic': 0.10, 'onion': 0.03, 'tomato': 0.03,
+  'potato': 0.03, 'water': 0.00
 };
 
-const formatRecipe = (meal: ExternalMeal): FormattedRecipe => {
+const getEstimatedPrice = (englishName: string): number => {
+  const nameLower = englishName.toLowerCase();
+  for (const [key, price] of Object.entries(ESTIMATED_PRICES_EN)) {
+    if (nameLower.includes(key)) return price; 
+  }
+  return 0.04; 
+};
+
+const translateToSpanish = async (text: string): Promise<string> => {
+  if (!text || text.trim() === '') return '';
+  try {
+    const response = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=es&dt=t&q=${encodeURIComponent(text)}`);
+    const data = await response.json();
+    return data[0].map((item: any) => item[0]).join('');
+  } catch (error) {
+    return text; 
+  }
+};
+
+const normalizeMeasure = (measure: string): { quantity: number, unit: 'g' | 'ml' } => {
+  const lower = measure?.toLowerCase() || '';
+  let amount = 1;
+  const match = lower.match(/(\d+\s*\d*\/\d+|\d+\.\d+|\d+)/);
+  
+  if (match) {
+    const val = match[1].trim();
+    if (val.includes('/')) {
+      const parts = val.split(' ');
+      if (parts.length === 2) { 
+        amount = parseFloat(parts[0]) + (parseFloat(parts[1].split('/')[0]) / parseFloat(parts[1].split('/')[1]));
+      } else { 
+        amount = parseFloat(val.split('/')[0]) / parseFloat(val.split('/')[1]);
+      }
+    } else {
+      amount = parseFloat(val);
+    }
+  }
+
+  let unit: 'g' | 'ml' = 'g';
+  let finalQuantity = amount;
+
+  if (lower.includes('ml') || lower.includes('milliliter')) { unit = 'ml'; finalQuantity = amount; }
+  else if (lower.includes('l') || lower.includes('liter') || lower.includes('water') || lower.includes('milk')) { unit = 'ml'; finalQuantity = amount * 1000; }
+  else if (lower.includes('kg')) { unit = 'g'; finalQuantity = amount * 1000; }
+  else if (lower.includes('g') && !lower.includes('garlic')) { unit = 'g'; finalQuantity = amount; }
+  else if (lower.includes('lb') || lower.includes('pound')) { unit = 'g'; finalQuantity = amount * 453.59; }
+  else if (lower.includes('oz') || lower.includes('ounce')) {
+    if (lower.includes('fluid') || lower.includes('fl')) { unit = 'ml'; finalQuantity = amount * 29.57; }
+    else { unit = 'g'; finalQuantity = amount * 28.35; }
+  }
+  else if (lower.includes('cup')) { unit = 'ml'; finalQuantity = amount * 240; } 
+  else if (lower.includes('tbsp') || lower.includes('tablespoon')) { unit = 'g'; finalQuantity = amount * 15; }
+  else if (lower.includes('tsp') || lower.includes('teaspoon')) { unit = 'g'; finalQuantity = amount * 5; }
+  else if (lower.includes('pinch')) { unit = 'g'; finalQuantity = amount * 1; }
+  else { finalQuantity = amount * 50; } 
+
+  return { quantity: Number(finalQuantity.toFixed(2)), unit };
+};
+
+// --- AHORA ES ASÍNCRONA PARA TRADUCIR TODO EN TIEMPO REAL ---
+const formatRecipe = async (meal: ExternalMeal): Promise<FormattedRecipe> => {
+  const translatedTitle = await translateToSpanish(meal.strMeal);
+  const translatedInstructions = await translateToSpanish(meal.strInstructions);
+
   const ingredients = [];
   for (let i = 1; i <= 20; i++) {
     const name = meal[`strIngredient${i}`];
     const measure = meal[`strMeasure${i}`];
 
     if (name && name.trim() !== '') {
+      const norm = normalizeMeasure(measure || '');
+      const translatedName = await translateToSpanish(name.trim()); // Traducimos ingrediente
+      
       ingredients.push({
-        name: name.trim(), 
+        name: translatedName, // Español para el Frontend
+        original_name: name.trim(), // Inglés para calcular el precio interno
         original_measure: measure ? measure.trim() : '',
-        quantity: convertToGrams(measure || '', name),
-        unit: 'g' 
+        quantity: norm.quantity,
+        unit: norm.unit 
       });
     }
   }
 
   return {
     id: meal.idMeal,
-    title: meal.strMeal,
+    title: translatedTitle, 
     category: TRANSLATIONS[meal.strCategory] || meal.strCategory,
     region: TRANSLATIONS[meal.strArea] || meal.strArea,
     image_url: meal.strMealThumb,
-    instructions: meal.strInstructions,
+    instructions: translatedInstructions,
     is_custom: false, 
-    servings: null, 
+    servings: "2", 
     ingredients: ingredients
   };
 };
 
 export const searchExternalRecipesService = async (query: string): Promise<FormattedRecipe[]> => {
   const response = await fetch(`${BASE_URL}${API_KEY}/search.php?s=${query}`);
-  if (!response.ok) throw new Error('Error al conectar con el proveedor externo');
+  if (!response.ok) throw new Error('Error al conectar');
   
   const data = await response.json();
   if (!data.meals) return [];
 
   const filteredMeals = data.meals.filter((meal: ExternalMeal) => ALLOWED_AREAS.includes(meal.strArea));
-  return filteredMeals.map((meal: ExternalMeal) => formatRecipe(meal));
+  // Usamos Promise.all porque formatRecipe ahora es asíncrono
+  return await Promise.all(filteredMeals.map((meal: ExternalMeal) => formatRecipe(meal)));
 };
 
 export const getRandomExternalRecipesService = async (): Promise<FormattedRecipe[]> => {
   const response = await fetch(`${BASE_URL}${API_KEY}/randomselection.php`);
-  if (!response.ok) throw new Error('Error al conectar con el proveedor externo');
+  if (!response.ok) throw new Error('Error al conectar');
   
   const data = await response.json();
   if (!data.meals) return [];
 
   const filteredMeals = data.meals.filter((meal: ExternalMeal) => ALLOWED_AREAS.includes(meal.strArea));
-  return filteredMeals.map((meal: ExternalMeal) => formatRecipe(meal));
+  return await Promise.all(filteredMeals.map((meal: ExternalMeal) => formatRecipe(meal)));
 };
 
 export const getAllRegionalRecipesService = async (): Promise<FormattedRecipe[]> => {
@@ -130,27 +191,38 @@ export const getAllRegionalRecipesService = async (): Promise<FormattedRecipe[]>
       const detailData = await detailResponse.json();
       
       if (detailData.meals && detailData.meals[0]) {
-        fullRecipes.push(formatRecipe(detailData.meals[0]));
+        // Traducimos al vuelo
+        fullRecipes.push(await formatRecipe(detailData.meals[0]));
       }
     }
   }
 
   return fullRecipes;
 };
+
 export const importExternalRecipeService = async (externalMeal: ExternalMeal, userId: string) => {
-  const formatted = formatRecipe(externalMeal);
+  
+  // Como formatRecipe ya traduce todo, solo lo mandamos llamar
+  const formatted = await formatRecipe(externalMeal);
 
   const ingredientMappings = await Promise.all(
-    formatted.ingredients.map(async (ing: { name: string; quantity: number }) => {
-      let localIng = await prisma.ingredient.findUnique({ where: { name: ing.name } });
+    formatted.ingredients.map(async (ing) => {
+      
+      let localIng = await prisma.ingredient.findFirst({ 
+        where: { name: { equals: ing.name, mode: 'insensitive' } } 
+      });
 
       if (!localIng) {
+        // Usamos el nombre original guardado para que la heurística en inglés funcione
+        const smartPrice = getEstimatedPrice(ing.original_name); 
+
         localIng = await prisma.ingredient.create({
           data: {
-            name: ing.name, 
+            name: ing.name, // Se guarda en español
             category: 'Importado',
-            unit_price: 0.05, 
-            weight_per_unit: 1.00 
+            unit_price: smartPrice, 
+            weight_per_unit: 1.00, 
+            unit_default: ing.unit 
           }
         });
       }
@@ -165,10 +237,9 @@ export const importExternalRecipeService = async (externalMeal: ExternalMeal, us
       image_url: formatted.image_url,
       author_id: userId,
       is_custom: true,
-      servings: null, 
+      servings: "2", 
       ingredients: {
-
-        create: ingredientMappings.map((map: { ingredient_id: number; quantity: number }) => ({
+        create: ingredientMappings.map(map => ({
           ingredient_id: map.ingredient_id,
           required_quantity: map.quantity
         }))
