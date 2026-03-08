@@ -6,19 +6,29 @@ export const createIngredient = async (req: AuthRequest, res: Response): Promise
   const author_id = req.user?.userId; 
   const { name, category, purchase_price, purchase_quantity, weight_per_unit, unit_default } = req.body;
 
-  if (!author_id || !name || !category) {
-    res.status(400).json({ error: 'Faltan datos obligatorios: name o category (o el token es inválido).' });
+  // --- CANDADO ESTRICTO 1: Formulario completo ---
+  if (
+    !author_id || !name || !category || 
+    purchase_price === undefined || 
+    purchase_quantity === undefined || 
+    !unit_default
+  ) {
+    res.status(400).json({ 
+      error: 'Faltan datos obligatorios. Debes enviar: name, category, purchase_price, purchase_quantity y unit_default.' 
+    });
     return;
   }
 
-  if (unit_default && !['g', 'ml'].includes(unit_default.toLowerCase())) {
+  // --- CANDADO ESTRICTO 2: Unidades válidas ---
+  if (!['g', 'ml'].includes(unit_default.toLowerCase())) {
     res.status(400).json({ error: 'El campo unit_default solo permite los valores "g" o "ml".' });
     return;
   }
 
+  // --- CANDADO ESTRICTO 3: Matemáticas reales ---
   if (
-    (purchase_price !== undefined && Number(purchase_price) < 0) ||
-    (purchase_quantity !== undefined && Number(purchase_quantity) <= 0) ||
+    Number(purchase_price) < 0 ||
+    Number(purchase_quantity) <= 0 ||
     (weight_per_unit !== undefined && Number(weight_per_unit) <= 0)
   ) {
     res.status(400).json({ error: 'Error matemático: Los precios no pueden ser negativos, y las cantidades o pesos deben ser mayores a cero.' });
@@ -28,7 +38,7 @@ export const createIngredient = async (req: AuthRequest, res: Response): Promise
   try {
     const newIngredient = await createIngredientService({ 
       ...req.body, 
-      unit_default: unit_default?.toLowerCase(), // Nos aseguramos de guardarlo en minúscula
+      unit_default: unit_default.toLowerCase(),
       author_id 
     });
     res.status(201).json({
@@ -48,21 +58,36 @@ export const createIngredient = async (req: AuthRequest, res: Response): Promise
 export const updateIngredient = async (req: AuthRequest, res: Response): Promise<void> => {
   const { id } = req.params;
   const user_id = req.user?.userId; 
-  const { purchase_price, purchase_quantity, weight_per_unit, unit_default } = req.body;
+  const { name, category, purchase_price, purchase_quantity, weight_per_unit, unit_default } = req.body;
 
   if (!user_id) {
     res.status(400).json({ error: 'No se pudo verificar tu identidad a partir del token.' });
     return;
   }
 
-  if (unit_default && !['g', 'ml'].includes(unit_default.toLowerCase())) {
+  // --- CANDADO ESTRICTO 1: Formulario completo para actualizar ---
+  if (
+    !name || !category || 
+    purchase_price === undefined || 
+    purchase_quantity === undefined || 
+    !unit_default
+  ) {
+    res.status(400).json({ 
+      error: 'Para editar un ingrediente, debes enviar el formulario completo: name, category, purchase_price, purchase_quantity y unit_default.' 
+    });
+    return;
+  }
+
+  // --- CANDADO ESTRICTO 2: Unidades válidas ---
+  if (!['g', 'ml'].includes(unit_default.toLowerCase())) {
     res.status(400).json({ error: 'El campo unit_default solo permite los valores "g" o "ml".' });
     return;
   }
 
+  // --- CANDADO ESTRICTO 3: Matemáticas reales ---
   if (
-    (purchase_price !== undefined && Number(purchase_price) < 0) ||
-    (purchase_quantity !== undefined && Number(purchase_quantity) <= 0) ||
+    Number(purchase_price) < 0 ||
+    Number(purchase_quantity) <= 0 ||
     (weight_per_unit !== undefined && Number(weight_per_unit) <= 0)
   ) {
     res.status(400).json({ error: 'Error matemático: Valores inválidos.' });
@@ -72,7 +97,7 @@ export const updateIngredient = async (req: AuthRequest, res: Response): Promise
   try {
     const updatedIngredient = await updateIngredientService(Number(id), { 
       ...req.body, 
-      unit_default: unit_default?.toLowerCase(),
+      unit_default: unit_default.toLowerCase(),
       user_id 
     });
     res.json({

@@ -5,10 +5,8 @@ const prisma = new PrismaClient();
 export const createIngredientService = async (data: any) => {
   const { author_id, name, category, purchase_price, purchase_quantity, unit_default, weight_per_unit } = data;
 
-  let calculatedUnitPrice = 0.05; 
-  if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
-    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
-  }
+  // Matemática estricta y real (El controlador ya garantizó que estos datos existen y no son cero)
+  const calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
 
   return await prisma.ingredient.create({
     data: {
@@ -16,8 +14,9 @@ export const createIngredientService = async (data: any) => {
       name,
       category,
       unit_price: calculatedUnitPrice,
-      unit_default: unit_default || 'g',
-      weight_per_unit: Number(weight_per_unit) || 1.00
+      unit_default: unit_default.toLowerCase(),
+      // El único valor opcional: Si no lo mandan, asumimos 1 gramo = 1 unidad
+      weight_per_unit: weight_per_unit !== undefined ? Number(weight_per_unit) : 1.00
     }
   });
 };
@@ -30,18 +29,16 @@ export const updateIngredientService = async (id: number, data: any) => {
     throw new Error('No tienes permiso para editar este ingrediente o no existe.');
   }
 
-  let calculatedUnitPrice = Number(ingredient.unit_price); 
-  if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
-    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
-  }
+  // Recalculamos obligatoriamente con los nuevos datos estrictos
+  const calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
 
   return await prisma.ingredient.update({
     where: { id },
     data: {
-      name: name || ingredient.name,
-      category: category || ingredient.category,
+      name,
+      category,
       unit_price: calculatedUnitPrice,
-      unit_default: unit_default || ingredient.unit_default,
+      unit_default: unit_default.toLowerCase(),
       weight_per_unit: weight_per_unit !== undefined ? Number(weight_per_unit) : ingredient.weight_per_unit 
     }
   });
