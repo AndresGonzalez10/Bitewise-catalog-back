@@ -15,6 +15,6 @@ app.use(express.json());
 app.use('/api/ingredients', ingredientRoutes);
 app.use('/api/recipes', recipeRoutes);
 
-app.listen(PORT, () => {
-  console.log(`🍔 Servicio de Catálogo (Ingredientes) corriendo en http://localhost:${PORT}`);
+app.listen(PORT as number, '0.0.0.0', () => {
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
 });
