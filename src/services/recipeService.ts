@@ -2,8 +2,6 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-
-
 export const getAllRecipesService = async (userId: string) => {
   return await prisma.recipe.findMany({
     where: {
@@ -81,7 +79,6 @@ export const deleteRecipeService = async (id: number, user_id: string) => {
   return await prisma.recipe.delete({ where: { id } });
 };
 
-
 export const getMatchingRecipesService = async (userId: string) => {
 
   const allRecipes = await prisma.recipe.findMany({
@@ -114,20 +111,21 @@ export const getMatchingRecipesService = async (userId: string) => {
       const userHas = userInvItem ? Number(userInvItem.current_quantity) : 0;
       const required = Number(ri.required_quantity);
 
-if (userHas < required) {
-    canCookPerfectly = false;
-    const diff = required - userHas;
-    
-    const missingUnits = Math.ceil(diff / Number(ri.ingredient.weight_per_unit));
+      if (userHas < required) {
+        canCookPerfectly = false;
+        const diff = required - userHas;
+        
+        // NUEVA LÓGICA: Ya no dividimos por el peso. Lo que falta, falta directamente en la unidad correcta.
+        const missingUnits = Math.ceil(diff);
 
-    missingIngredients.push({
-        ingredient_id: ri.ingredient_id,
-        name: ri.ingredient.name,
-        missing_quantity: diff,
-        missing_units: missingUnits, 
-        unit: ri.ingredient.unit_default
-    });
-}
+        missingIngredients.push({
+            ingredient_id: ri.ingredient_id,
+            name: ri.ingredient.name,
+            missing_quantity: diff,
+            missing_units: missingUnits, 
+            unit: ri.ingredient.unit_default
+        });
+      }
 
       return {
         ingredient_id: ri.ingredient_id,

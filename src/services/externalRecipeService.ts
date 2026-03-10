@@ -28,7 +28,7 @@ export interface FormattedRecipe {
   servings: string | null; 
   ingredients: {
     name: string;
-    original_name: string; // <-- Guardamos el inglés escondido para los precios
+    original_name: string; 
     original_measure: string;
     quantity: number;
     unit: string;
@@ -74,7 +74,7 @@ const translateToSpanish = async (text: string): Promise<string> => {
   }
 };
 
-const normalizeMeasure = (measure: string): { quantity: number, unit: 'g' | 'ml' } => {
+const normalizeMeasure = (measure: string): { quantity: number, unit: string } => {
   const lower = measure?.toLowerCase() || '';
   let amount = 1;
   const match = lower.match(/(\d+\s*\d*\/\d+|\d+\.\d+|\d+)/);
@@ -93,7 +93,7 @@ const normalizeMeasure = (measure: string): { quantity: number, unit: 'g' | 'ml'
     }
   }
 
-  let unit: 'g' | 'ml' = 'g';
+  let unit = 'g';
   let finalQuantity = amount;
 
   if (lower.includes('ml') || lower.includes('milliliter')) { unit = 'ml'; finalQuantity = amount; }
@@ -109,12 +109,15 @@ const normalizeMeasure = (measure: string): { quantity: number, unit: 'g' | 'ml'
   else if (lower.includes('tbsp') || lower.includes('tablespoon')) { unit = 'g'; finalQuantity = amount * 15; }
   else if (lower.includes('tsp') || lower.includes('teaspoon')) { unit = 'g'; finalQuantity = amount * 5; }
   else if (lower.includes('pinch')) { unit = 'g'; finalQuantity = amount * 1; }
-  else { finalQuantity = amount * 50; } 
+  else { 
+    // NUEVO: Si la API dice "2", "1 clove", "1 whole", etc., lo tratamos como 'unidad'
+    unit = 'unidad'; 
+    finalQuantity = amount; 
+  } 
 
   return { quantity: Number(finalQuantity.toFixed(2)), unit };
 };
 
-// --- AHORA ES ASÍNCRONA PARA TRADUCIR TODO EN TIEMPO REAL ---
 const formatRecipe = async (meal: ExternalMeal): Promise<FormattedRecipe> => {
   const translatedTitle = await translateToSpanish(meal.strMeal);
   const translatedInstructions = await translateToSpanish(meal.strInstructions);
@@ -126,11 +129,11 @@ const formatRecipe = async (meal: ExternalMeal): Promise<FormattedRecipe> => {
 
     if (name && name.trim() !== '') {
       const norm = normalizeMeasure(measure || '');
-      const translatedName = await translateToSpanish(name.trim()); // Traducimos ingrediente
+      const translatedName = await translateToSpanish(name.trim()); 
       
       ingredients.push({
-        name: translatedName, // Español para el Frontend
-        original_name: name.trim(), // Inglés para calcular el precio interno
+        name: translatedName, 
+        original_name: name.trim(), 
         original_measure: measure ? measure.trim() : '',
         quantity: norm.quantity,
         unit: norm.unit 
@@ -159,7 +162,6 @@ export const searchExternalRecipesService = async (query: string): Promise<Forma
   if (!data.meals) return [];
 
   const filteredMeals = data.meals.filter((meal: ExternalMeal) => ALLOWED_AREAS.includes(meal.strArea));
-  // Usamos Promise.all porque formatRecipe ahora es asíncrono
   return await Promise.all(filteredMeals.map((meal: ExternalMeal) => formatRecipe(meal)));
 };
 
@@ -191,7 +193,6 @@ export const getAllRegionalRecipesService = async (): Promise<FormattedRecipe[]>
       const detailData = await detailResponse.json();
       
       if (detailData.meals && detailData.meals[0]) {
-        // Traducimos al vuelo
         fullRecipes.push(await formatRecipe(detailData.meals[0]));
       }
     }
@@ -201,27 +202,27 @@ export const getAllRegionalRecipesService = async (): Promise<FormattedRecipe[]>
 };
 
 export const importExternalRecipeService = async (externalMeal: ExternalMeal, userId: string) => {
-  
-  // Como formatRecipe ya traduce todo, solo lo mandamos llamar
   const formatted = await formatRecipe(externalMeal);
 
   const ingredientMappings = await Promise.all(
     formatted.ingredients.map(async (ing) => {
       
       let localIng = await prisma.ingredient.findFirst({ 
-        where: { name: { equals: ing.name, mode: 'insensitive' } } 
+        where: { 
+            name: { equals: ing.name, mode: 'insensitive' },
+            OR: [ { author_id: null }, { author_id: userId } ]
+        } 
       });
 
       if (!localIng) {
-        // Usamos el nombre original guardado para que la heurística en inglés funcione
         const smartPrice = getEstimatedPrice(ing.original_name); 
 
         localIng = await prisma.ingredient.create({
           data: {
-            name: ing.name, // Se guarda en español
+            author_id: userId, 
+            name: ing.name, 
             category: 'Importado',
             unit_price: smartPrice, 
-            weight_per_unit: 1.00, 
             unit_default: ing.unit 
           }
         });
@@ -235,7 +236,7 @@ export const importExternalRecipeService = async (externalMeal: ExternalMeal, us
       title: formatted.title,
       instructions: formatted.instructions,
       image_url: formatted.image_url,
-      author_id: userId,
+      author_id: userId, 
       is_custom: true,
       servings: "2", 
       ingredients: {
