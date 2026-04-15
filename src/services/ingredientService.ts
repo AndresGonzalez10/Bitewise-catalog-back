@@ -3,52 +3,46 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 
 export const createIngredientService = async (data: any) => {
-  const { author_id, name, category, purchase_price, purchase_quantity, unit_default, weight_per_unit } = data;
+  const { author_id, name, category, purchase_price, purchase_quantity, unit_default } = data;
 
-  let calculatedUnitPrice = 0.05; 
-  if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
-    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
-  }
+  // Matemática limpia: Precio total / Cantidad comprada = Precio por unidad
+  const calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
 
-  return await prisma.ingredient.create({
+  return await prisma.ingredients.create({
     data: {
       author_id,
       name,
       category,
       unit_price: calculatedUnitPrice,
-      unit_default: unit_default || 'g',
-      weight_per_unit: Number(weight_per_unit) || 1.00
+      unit_default: unit_default.toLowerCase()
     }
   });
 };
 
 export const updateIngredientService = async (id: number, data: any) => {
-  const { user_id, name, category, purchase_price, purchase_quantity, unit_default, weight_per_unit } = data;
+  const { user_id, name, category, purchase_price, purchase_quantity, unit_default } = data;
 
-  const ingredient = await prisma.ingredient.findUnique({ where: { id } });
+  const ingredient = await prisma.ingredients.findUnique({ where: { id } });
   if (!ingredient || ingredient.author_id !== user_id) {
     throw new Error('No tienes permiso para editar este ingrediente o no existe.');
   }
 
-  let calculatedUnitPrice = ingredient.unit_price; 
-  if (purchase_price !== undefined && purchase_quantity !== undefined && purchase_quantity > 0) {
-    calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity) as any;
-  }
+  // Recalculamos el precio en caso de que hayan cambiado los valores en el front
+  const calculatedUnitPrice = Number(purchase_price) / Number(purchase_quantity);
 
-  return await prisma.ingredient.update({
+  return await prisma.ingredients.update({
     where: { id },
     data: {
-      name: name || ingredient.name,
-      category: category || ingredient.category,
+      name,
+      category,
       unit_price: calculatedUnitPrice,
-      unit_default: unit_default || ingredient.unit_default,
-      weight_per_unit: weight_per_unit !== undefined ? Number(weight_per_unit) : ingredient.weight_per_unit 
+      unit_default: unit_default.toLowerCase()
     }
   });
 };
 
 export const getAllIngredientsService = async (userId?: string) => {
-  return await prisma.ingredient.findMany({
+  return await prisma.ingredients.findMany({
     where: {
       OR: [
         { author_id: null }, 
@@ -59,17 +53,28 @@ export const getAllIngredientsService = async (userId?: string) => {
   });
 };
 
+export const searchIngredientsService = async (query: string, userId?: string) => {
+  return await prisma.ingredients.findMany({
+    where: {
+      name: { contains: query, mode: 'insensitive' }, 
+      OR: [
+        { author_id: null },
+        ...(userId ? [{ author_id: userId }] : [])
+      ]
+    },
+    orderBy: { name: 'asc' },
+    take: 20 
+  });
+};
+
 export const deleteIngredientService = async (id: number, user_id: string) => {
-
-  const ingredient = await prisma.ingredient.findUnique({ where: { id } });
+  const ingredient = await prisma.ingredients.findUnique({ where: { id } });
   
-
   if (!ingredient || ingredient.author_id !== user_id) {
     throw new Error('No tienes permiso para eliminar este ingrediente o no existe.');
   }
 
-
-  return await prisma.ingredient.delete({
+  return await prisma.ingredients.delete({
     where: { id }
   });
 };
