@@ -207,7 +207,7 @@ export const importExternalRecipeService = async (externalMeal: ExternalMeal, us
   const ingredientMappings = await Promise.all(
     formatted.ingredients.map(async (ing) => {
       
-      let localIng = await prisma.ingredient.findFirst({ 
+      let localIng = await prisma.ingredients.findFirst({ 
         where: { 
             name: { equals: ing.name, mode: 'insensitive' },
             OR: [ { author_id: null }, { author_id: userId } ]
@@ -217,7 +217,7 @@ export const importExternalRecipeService = async (externalMeal: ExternalMeal, us
       if (!localIng) {
         const smartPrice = getEstimatedPrice(ing.original_name); 
 
-        localIng = await prisma.ingredient.create({
+        localIng = await prisma.ingredients.create({
           data: {
             author_id: userId, 
             name: ing.name, 
@@ -231,7 +231,7 @@ export const importExternalRecipeService = async (externalMeal: ExternalMeal, us
     })
   );
 
-  return await prisma.recipe.create({
+  return await prisma.recipes.create({
     data: {
       title: formatted.title,
       instructions: formatted.instructions,
@@ -239,7 +239,7 @@ export const importExternalRecipeService = async (externalMeal: ExternalMeal, us
       author_id: userId, 
       is_custom: true,
       servings: "2", 
-      ingredients: {
+      recipe_ingredients: {
         create: ingredientMappings.map(map => ({
           ingredient_id: map.ingredient_id,
           required_quantity: map.quantity
